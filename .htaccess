@@ -1,0 +1,12 @@
+RewriteEngine On
+# /mail/name@outlook.com → inbox.php
+RewriteRule ^(mail|inbox)/([^/]+)/?$ inbox.php?email=$2 [L,QSA]
+<Files "config.php">
+  Require all denied
+</Files>
+<FilesMatch "\.(sql|md)$">
+  Require all denied
+</FilesMatch>
+<Files "installed.lock">
+  Require all denied
+</Files>
