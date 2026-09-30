@@ -7,42 +7,193 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
+        * {
+            @apply transition-colors duration-200;
+        }
+
+        body {
+            @apply bg-background text-foreground;
+        }
+
+        .shadcn-btn {
+            @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-md font-medium transition-all duration-200;
+            @apply focus:outline-none focus:ring-2 focus:ring-offset-2;
+        }
+
+        .btn-primary {
+            @apply bg-primary text-primary-foreground hover:bg-primary/90;
+            @apply focus:ring-primary;
+        }
+
+        .btn-secondary {
+            @apply bg-secondary text-secondary-foreground hover:bg-secondary/80;
+            @apply focus:ring-secondary;
+        }
+
+        .btn-destructive {
+            @apply bg-destructive text-destructive-foreground hover:bg-destructive/90;
+            @apply focus:ring-destructive;
+        }
+
+        .btn-ghost {
+            @apply bg-transparent text-foreground hover:bg-accent hover:text-accent-foreground;
+        }
+
+        .btn-outline {
+            @apply border border-input bg-background hover:bg-accent hover:text-accent-foreground;
+        }
+
+        .shadcn-card {
+            @apply bg-card text-card-foreground rounded-lg border border-border shadow-sm;
+        }
+
+        .shadcn-input {
+            @apply flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm;
+            @apply placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2;
+        }
+
+        .shadcn-badge {
+            @apply inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold;
+        }
+
+        .badge-default {
+            @apply bg-secondary text-secondary-foreground;
+        }
+
+        .badge-success {
+            @apply bg-green-100 text-green-800;
+        }
+
+        .badge-destructive {
+            @apply bg-red-100 text-red-800;
+        }
+
+        .badge-warning {
+            @apply bg-yellow-100 text-yellow-800;
+        }
+
+        .email-grid {
+            display: grid;
+            gap: 1rem;
+        }
+
         @media (max-width: 640px) {
             .email-grid {
                 grid-template-columns: 1fr;
             }
         }
+
         @media (min-width: 641px) and (max-width: 1024px) {
             .email-grid {
                 grid-template-columns: repeat(2, 1fr);
             }
         }
+
         @media (min-width: 1025px) {
             .email-grid {
                 grid-template-columns: repeat(3, 1fr);
             }
         }
     </style>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        background: 'hsl(var(--background))',
+                        foreground: 'hsl(var(--foreground))',
+                        primary: 'hsl(var(--primary))',
+                        'primary-foreground': 'hsl(var(--primary-foreground))',
+                        secondary: 'hsl(var(--secondary))',
+                        'secondary-foreground': 'hsl(var(--secondary-foreground))',
+                        destructive: 'hsl(var(--destructive))',
+                        'destructive-foreground': 'hsl(var(--destructive-foreground))',
+                        muted: 'hsl(var(--muted))',
+                        'muted-foreground': 'hsl(var(--muted-foreground))',
+                        accent: 'hsl(var(--accent))',
+                        'accent-foreground': 'hsl(var(--accent-foreground))',
+                        border: 'hsl(var(--border))',
+                        input: 'hsl(var(--input))',
+                        ring: 'hsl(var(--ring))',
+                        card: 'hsl(var(--card))',
+                        'card-foreground': 'hsl(var(--card-foreground))',
+                    },
+                }
+            }
+        }
+    </script>
+    <style>
+        :root {
+            --background: 0 0% 100%;
+            --foreground: 0 0% 3.6%;
+            --primary: 0 0% 9%;
+            --primary-foreground: 0 0% 100%;
+            --secondary: 0 0% 96.1%;
+            --secondary-foreground: 0 0% 9%;
+            --destructive: 0 84.2% 60.2%;
+            --destructive-foreground: 0 0% 100%;
+            --muted: 0 0% 96.1%;
+            --muted-foreground: 0 0% 45.1%;
+            --accent: 0 0% 9%;
+            --accent-foreground: 0 0% 100%;
+            --border: 0 0% 89.8%;
+            --input: 0 0% 89.8%;
+            --ring: 0 0% 3.6%;
+            --card: 0 0% 100%;
+            --card-foreground: 0 0% 3.6%;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --background: 0 0% 3.6%;
+                --foreground: 0 0% 98.2%;
+                --primary: 0 0% 98.2%;
+                --primary-foreground: 0 0% 9%;
+                --secondary: 0 0% 14.9%;
+                --secondary-foreground: 0 0% 98.2%;
+                --destructive: 0 86.1% 61.2%;
+                --destructive-foreground: 0 0% 14.9%;
+                --muted: 0 0% 14.9%;
+                --muted-foreground: 0 0% 63.9%;
+                --accent: 0 0% 98.2%;
+                --accent-foreground: 0 0% 9%;
+                --border: 0 0% 14.9%;
+                --input: 0 0% 14.9%;
+                --ring: 0 0% 83.1%;
+                --card: 0 0% 9%;
+                --card-foreground: 0 0% 98.2%;
+            }
+        }
+    </style>
 </head>
-<body class="bg-gray-50">
+<body class="bg-background text-foreground">
     <div class="min-h-screen">
         <!-- Header -->
-        <header class="bg-white shadow-md sticky top-0 z-50">
+        <header class="bg-card border-b border-border sticky top-0 z-50 shadow-sm">
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
                 <div class="flex flex-col sm:flex-row items-center justify-between gap-4">
-                    <div class="flex items-center gap-2">
-                        <i class="fas fa-envelope text-blue-600 text-2xl"></i>
-                        <h1 class="text-2xl sm:text-3xl font-bold text-gray-900">Outlook Viewer</h1>
+                    <div class="flex items-center gap-3">
+                        <div class="bg-primary text-primary-foreground p-2 rounded-lg">
+                            <i class="fas fa-envelope text-lg"></i>
+                        </div>
+                        <div>
+                            <h1 class="text-2xl sm:text-3xl font-bold">Outlook Viewer</h1>
+                            <p class="text-xs sm:text-sm text-muted-foreground">Email management</p>
+                        </div>
                     </div>
                     <div class="flex flex-wrap items-center justify-center gap-2">
-                        <button id="refreshBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition">
+                        <button id="refreshBtn" class="shadcn-btn btn-secondary">
                             <i class="fas fa-sync-alt"></i>
                             <span class="hidden sm:inline">Refresh</span>
                         </button>
-                        <button id="settingsBtn" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition">
+                        <button id="settingsBtn" class="shadcn-btn btn-ghost">
                             <i class="fas fa-cog"></i>
                             <span class="hidden sm:inline">Settings</span>
                         </button>
+                        <a href="admin/" class="shadcn-btn btn-outline">
+                            <i class="fas fa-shield"></i>
+                            <span class="hidden sm:inline">Admin</span>
+                        </a>
                     </div>
                 </div>
             </div>
@@ -51,23 +202,23 @@
         <!-- Main Content -->
         <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
             <!-- Toolbar -->
-            <div class="bg-white rounded-lg shadow-md p-4 mb-6">
+            <div class="shadcn-card p-4 mb-6">
                 <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 flex-wrap">
                     <div class="flex items-center gap-2 w-full sm:w-auto">
-                        <input type="checkbox" id="selectAllBtn" class="w-5 h-5 rounded cursor-pointer" title="Select All">
-                        <label for="selectAllBtn" class="text-sm font-medium text-gray-700 cursor-pointer">Select All</label>
-                        <span id="selectedCount" class="text-sm text-gray-600 ml-2">(0 selected)</span>
+                        <input type="checkbox" id="selectAllBtn" class="w-5 h-5 rounded cursor-pointer">
+                        <label for="selectAllBtn" class="text-sm font-medium cursor-pointer">Select All</label>
+                        <span id="selectedCount" class="text-sm text-muted-foreground ml-2">(0 selected)</span>
                     </div>
                     
                     <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto">
                         <!-- Search -->
                         <div class="relative flex-1 sm:flex-initial">
-                            <input type="text" id="searchBox" placeholder="Search emails..." class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                            <i class="fas fa-search absolute right-3 top-3 text-gray-400"></i>
+                            <input type="text" id="searchBox" placeholder="Search emails..." class="shadcn-input w-full sm:w-64">
+                            <i class="fas fa-search absolute right-3 top-3 text-muted-foreground"></i>
                         </div>
 
                         <!-- Filter Dropdown -->
-                        <select id="filterSelect" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        <select id="filterSelect" class="shadcn-input px-3 py-2">
                             <option value="">All Emails</option>
                             <option value="unread">Unread</option>
                             <option value="flagged">Flagged</option>
@@ -75,11 +226,11 @@
                         </select>
 
                         <!-- Bulk Actions -->
-                        <button id="bulkDeleteBtn" class="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-lg flex items-center gap-2 transition disabled:opacity-50" disabled>
+                        <button id="bulkDeleteBtn" class="shadcn-btn btn-destructive disabled:opacity-50" disabled>
                             <i class="fas fa-trash"></i>
                             <span class="hidden sm:inline">Delete</span>
                         </button>
-                        <button id="bulkMarkBtn" class="bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-2 rounded-lg flex items-center gap-2 transition disabled:opacity-50" disabled>
+                        <button id="bulkMarkBtn" class="shadcn-btn btn-secondary disabled:opacity-50" disabled>
                             <i class="fas fa-flag"></i>
                             <span class="hidden sm:inline">Flag</span>
                         </button>
@@ -90,31 +241,31 @@
             <!-- Loading State -->
             <div id="loadingState" class="text-center py-12">
                 <div class="inline-block">
-                    <i class="fas fa-spinner fa-spin text-4xl text-blue-600 mb-4"></i>
-                    <p class="text-gray-600 mt-4">Loading emails...</p>
+                    <i class="fas fa-spinner fa-spin text-4xl text-primary mb-4"></i>
+                    <p class="text-muted-foreground mt-4">Loading emails...</p>
                 </div>
             </div>
 
             <!-- Email Grid -->
-            <div id="emailGrid" class="email-grid gap-4" style="display: none;">
+            <div id="emailGrid" class="email-grid" style="display: none;">
                 <!-- Emails will be loaded here -->
             </div>
 
             <!-- Empty State -->
             <div id="emptyState" class="text-center py-12" style="display: none;">
-                <i class="fas fa-inbox text-6xl text-gray-300 mb-4"></i>
-                <p class="text-gray-600 text-lg">No emails found</p>
+                <i class="fas fa-inbox text-6xl text-muted mb-4"></i>
+                <p class="text-muted-foreground text-lg">No emails found</p>
             </div>
         </main>
     </div>
 
     <!-- Email Modal -->
-    <div id="emailModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 overflow-y-auto">
+    <div id="emailModal" class="hidden fixed inset-0 bg-black/50 z-50 overflow-y-auto">
         <div class="flex items-center justify-center min-h-screen p-4">
-            <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-                <div class="sticky top-0 bg-gray-100 px-6 py-4 flex justify-between items-center border-b">
+            <div class="shadcn-card max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                <div class="sticky top-0 bg-secondary px-6 py-4 flex justify-between items-center border-b">
                     <h2 id="modalTitle" class="text-xl font-bold"></h2>
-                    <button onclick="closeModal()" class="text-gray-600 hover:text-gray-900">
+                    <button onclick="closeModal()" class="text-foreground hover:text-muted-foreground">
                         <i class="fas fa-times text-2xl"></i>
                     </button>
                 </div>
@@ -234,7 +385,7 @@
             const card = document.createElement('div');
             const isSelected = selectedEmails.has(email.id);
             
-            card.className = `bg-white rounded-lg shadow-md hover:shadow-lg transition p-4 cursor-pointer border-2 ${isSelected ? 'border-blue-500 bg-blue-50' : 'border-transparent'}`;
+            card.className = `shadcn-card p-4 cursor-pointer hover:shadow-md border-l-4 ${isSelected ? 'border-l-primary bg-secondary' : 'border-l-transparent'}`;
             
             card.innerHTML = `
                 <div class="flex gap-3">
@@ -242,16 +393,16 @@
                     <div class="flex-1 min-w-0 cursor-pointer" onclick="openEmailModal(${email.id})">
                         <div class="flex items-start justify-between gap-2">
                             <div class="flex-1 min-w-0">
-                                <p class="font-semibold text-gray-900 truncate">${escapeHtml(email.from)}</p>
-                                <p class="text-sm ${email.unread ? 'font-bold text-gray-900' : 'text-gray-600'} line-clamp-2">${escapeHtml(email.subject)}</p>
-                                <p class="text-xs text-gray-500 mt-1 line-clamp-2">${escapeHtml(email.preview)}</p>
+                                <p class="font-semibold text-foreground truncate">${escapeHtml(email.from)}</p>
+                                <p class="text-sm ${email.unread ? 'font-bold text-foreground' : 'text-muted-foreground'} line-clamp-2">${escapeHtml(email.subject)}</p>
+                                <p class="text-xs text-muted-foreground mt-1 line-clamp-2">${escapeHtml(email.preview)}</p>
                             </div>
-                            <div class="flex-shrink-0 text-right">
-                                ${email.unread ? '<span class="inline-block bg-blue-500 text-white text-xs px-2 py-1 rounded">New</span>' : ''}
-                                ${email.flagged ? '<i class="fas fa-flag text-yellow-500 text-lg"></i>' : ''}
+                            <div class="flex-shrink-0 text-right space-y-1">
+                                ${email.unread ? '<span class="shadcn-badge badge-default"><i class="fas fa-circle-dot"></i> New</span>' : ''}
+                                ${email.flagged ? '<i class="fas fa-flag text-yellow-500"></i>' : ''}
                             </div>
                         </div>
-                        <p class="text-xs text-gray-400 mt-2">${email.date}</p>
+                        <p class="text-xs text-muted-foreground mt-2">${email.date}</p>
                     </div>
                 </div>
             `;
@@ -369,15 +520,16 @@
             document.getElementById('modalContent').innerHTML = `
                 <div class="space-y-4">
                     <div class="border-b pb-4">
-                        <p class="text-sm font-semibold text-gray-600">From:</p>
-                        <p class="text-gray-900">${escapeHtml(email.from)}</p>
+                        <p class="text-sm font-semibold text-muted-foreground">From:</p>
+                        <p class="text-foreground">${escapeHtml(email.from)}</p>
                     </div>
                     <div class="border-b pb-4">
-                        <p class="text-sm font-semibold text-gray-600">Date:</p>
-                        <p class="text-gray-900">${email.date}</p>
+                        <p class="text-sm font-semibold text-muted-foreground">Date:</p>
+                        <p class="text-foreground">${email.date}</p>
                     </div>
-                    <div class="prose prose-sm max-w-none">
-                        <p class="text-gray-900 whitespace-pre-wrap">${escapeHtml(email.body)}</p>
+                    <div class="space-y-2">
+                        <p class="text-sm font-semibold text-muted-foreground">Message:</p>
+                        <p class="text-foreground whitespace-pre-wrap">${escapeHtml(email.body)}</p>
                     </div>
                 </div>
             `;
