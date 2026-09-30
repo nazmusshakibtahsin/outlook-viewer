@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Outlook Viewer - Email Management</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @media (max-width: 640px) {
+            .email-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        @media (min-width: 641px) and (max-width: 1024px) {
+            .email-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        @media (min-width: 1025px) {
+            .email-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div class="min-h-screen">
+        <!-- Header -->
+        <header class="bg-white shadow-md sticky top-0 z-50">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+                <div class="flex flex-col sm:flex-row items-center justify-between gap-4">
+                    <div class="flex items-center gap-2">
+                        <i class="fas fa-envelope text-blue-600 text-2xl"></i>
+                        <h1 class="text-2xl sm:text-3xl font-bold text-gray-900">Outlook Viewer</h1>
+                    </div>
+                    <div class="flex flex-wrap items-center justify-center gap-2">
+                        <button id="refreshBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition">
+                            <i class="fas fa-sync-alt"></i>
+                            <span class="hidden sm:inline">Refresh</span>
+                        </button>
+                        <button id="settingsBtn" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition">
+                            <i class="fas fa-cog"></i>
+                            <span class="hidden sm:inline">Settings</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            <!-- Toolbar -->
+            <div class="bg-white rounded-lg shadow-md p-4 mb-6">
+                <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 flex-wrap">
+                    <div class="flex items-center gap-2 w-full sm:w-auto">
+                        <input type="checkbox" id="selectAllBtn" class="w-5 h-5 rounded cursor-pointer" title="Select All">
+                        <label for="selectAllBtn" class="text-sm font-medium text-gray-700 cursor-pointer">Select All</label>
+                        <span id="selectedCount" class="text-sm text-gray-600 ml-2">(0 selected)</span>
+                    </div>
+                    
+                    <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                        <!-- Search -->
+                        <div class="relative flex-1 sm:flex-initial">
+                            <input type="text" id="searchBox" placeholder="Search emails..." class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                            <i class="fas fa-search absolute right-3 top-3 text-gray-400"></i>
+                        </div>
+
+                        <!-- Filter Dropdown -->
+                        <select id="filterSelect" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                            <option value="">All Emails</option>
+                            <option value="unread">Unread</option>
+                            <option value="flagged">Flagged</option>
+                            <option value="recent">Recent</option>
+                        </select>
+
+                        <!-- Bulk Actions -->
+                        <button id="bulkDeleteBtn" class="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-lg flex items-center gap-2 transition disabled:opacity-50" disabled>
+                            <i class="fas fa-trash"></i>
+                            <span class="hidden sm:inline">Delete</span>
+                        </button>
+                        <button id="bulkMarkBtn" class="bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-2 rounded-lg flex items-center gap-2 transition disabled:opacity-50" disabled>
+                            <i class="fas fa-flag"></i>
+                            <span class="hidden sm:inline">Flag</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Loading State -->
+            <div id="loadingState" class="text-center py-12">
+                <div class="inline-block">
+                    <i class="fas fa-spinner fa-spin text-4xl text-blue-600 mb-4"></i>
+                    <p class="text-gray-600 mt-4">Loading emails...</p>
+                </div>
+            </div>
+
+            <!-- Email Grid -->
+            <div id="emailGrid" class="email-grid gap-4" style="display: none;">
+                <!-- Emails will be loaded here -->
+            </div>
+
+            <!-- Empty State -->
+            <div id="emptyState" class="text-center py-12" style="display: none;">
+                <i class="fas fa-inbox text-6xl text-gray-300 mb-4"></i>
+                <p class="text-gray-600 text-lg">No emails found</p>
+            </div>
+        </main>
+    </div>
+
+    <!-- Email Modal -->
+    <div id="emailModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 overflow-y-auto">
+        <div class="flex items-center justify-center min-h-screen p-4">
+            <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                <div class="sticky top-0 bg-gray-100 px-6 py-4 flex justify-between items-center border-b">
+                    <h2 id="modalTitle" class="text-xl font-bold"></h2>
+                    <button onclick="closeModal()" class="text-gray-600 hover:text-gray-900">
+                        <i class="fas fa-times text-2xl"></i>
+                    </button>
+                </div>
+                <div class="p-6">
+                    <div id="modalContent"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Sample data - Replace with actual API calls to Outlook
+        const sampleEmails = [
+            {
+                id: 1,
+                from: "john@example.com",
+                subject: "Meeting Tomorrow",
+                preview: "Hi, I wanted to confirm our meeting tomorrow at 2 PM...",
+                date: "Today 2:30 PM",
+                unread: true,
+                flagged: false,
+                body: "Hi, I wanted to confirm our meeting tomorrow at 2 PM. Please let me know if you can make it."
+            },
+            {
+                id: 2,
+                from: "sarah@company.com",
+                subject: "Project Update",
+                preview: "The project is on track. Here's the latest status report...",
+                date: "Today 1:15 PM",
+                unread: false,
+                flagged: true,
+                body: "The project is on track. Here's the latest status report with all the details..."
+            },
+            {
+                id: 3,
+                from: "notifications@github.com",
+                subject: "Your PR has been merged",
+                preview: "Your pull request #123 has been successfully merged...",
+                date: "Yesterday 9:45 AM",
+                unread: false,
+                flagged: false,
+                body: "Your pull request #123 has been successfully merged into the main branch."
+            },
+            {
+                id: 4,
+                from: "team@company.com",
+                subject: "Team Lunch Plans",
+                preview: "Let's plan our team lunch for next Friday...",
+                date: "Yesterday 3:20 PM",
+                unread: true,
+                flagged: false,
+                body: "Let's plan our team lunch for next Friday. Any preferences?"
+            },
+            {
+                id: 5,
+                from: "admin@company.com",
+                subject: "System Maintenance Notice",
+                preview: "System maintenance scheduled for Sunday at midnight...",
+                date: "2 days ago",
+                unread: false,
+                flagged: false,
+                body: "System maintenance scheduled for Sunday at midnight. Expected downtime: 2 hours."
+            },
+            {
+                id: 6,
+                from: "newsletter@site.com",
+                subject: "Weekly Newsletter",
+                preview: "This week's top stories and updates...",
+                date: "3 days ago",
+                unread: false,
+                flagged: false,
+                body: "This week's top stories and updates from around the web..."
+            }
+        ];
+
+        let emails = [...sampleEmails];
+        let selectedEmails = new Set();
+
+        // Initialize
+        function init() {
+            loadEmails();
+            setupEventListeners();
+        }
+
+        // Setup Event Listeners
+        function setupEventListeners() {
+            document.getElementById('selectAllBtn').addEventListener('change', toggleSelectAll);
+            document.getElementById('searchBox').addEventListener('input', filterEmails);
+            document.getElementById('filterSelect').addEventListener('change', filterEmails);
+            document.getElementById('refreshBtn').addEventListener('click', refreshEmails);
+            document.getElementById('bulkDeleteBtn').addEventListener('click', bulkDelete);
+            document.getElementById('bulkMarkBtn').addEventListener('click', bulkMark);
+        }
+
+        // Load and Display Emails
+        function loadEmails() {
+            const grid = document.getElementById('emailGrid');
+            grid.innerHTML = '';
+
+            if (emails.length === 0) {
+                document.getElementById('loadingState').style.display = 'none';
+                document.getElementById('emptyState').style.display = 'block';
+                return;
+            }
+
+            emails.forEach(email => {
+                const emailCard = createEmailCard(email);
+                grid.appendChild(emailCard);
+            });
+
+            document.getElementById('loadingState').style.display = 'none';
+            document.getElementById('emailGrid').style.display = 'grid';
+        }
+
+        // Create Email Card
+        function createEmailCard(email) {
+            const card = document.createElement('div');
+            const isSelected = selectedEmails.has(email.id);
+            
+            card.className = `bg-white rounded-lg shadow-md hover:shadow-lg transition p-4 cursor-pointer border-2 ${isSelected ? 'border-blue-500 bg-blue-50' : 'border-transparent'}`;
+            
+            card.innerHTML = `
+                <div class="flex gap-3">
+                    <input type="checkbox" class="email-checkbox w-5 h-5 flex-shrink-0 rounded cursor-pointer mt-1" data-id="${email.id}" ${isSelected ? 'checked' : ''}>
+                    <div class="flex-1 min-w-0 cursor-pointer" onclick="openEmailModal(${email.id})">
+                        <div class="flex items-start justify-between gap-2">
+                            <div class="flex-1 min-w-0">
+                                <p class="font-semibold text-gray-900 truncate">${escapeHtml(email.from)}</p>
+                                <p class="text-sm ${email.unread ? 'font-bold text-gray-900' : 'text-gray-600'} line-clamp-2">${escapeHtml(email.subject)}</p>
+                                <p class="text-xs text-gray-500 mt-1 line-clamp-2">${escapeHtml(email.preview)}</p>
+                            </div>
+                            <div class="flex-shrink-0 text-right">
+                                ${email.unread ? '<span class="inline-block bg-blue-500 text-white text-xs px-2 py-1 rounded">New</span>' : ''}
+                                ${email.flagged ? '<i class="fas fa-flag text-yellow-500 text-lg"></i>' : ''}
+                            </div>
+                        </div>
+                        <p class="text-xs text-gray-400 mt-2">${email.date}</p>
+                    </div>
+                </div>
+            `;
+
+            card.querySelector('.email-checkbox').addEventListener('change', (e) => {
+                e.stopPropagation();
+                toggleEmailSelection(email.id);
+            });
+
+            return card;
+        }
+
+        // Toggle Email Selection
+        function toggleEmailSelection(emailId) {
+            if (selectedEmails.has(emailId)) {
+                selectedEmails.delete(emailId);
+            } else {
+                selectedEmails.add(emailId);
+            }
+            updateSelectionUI();
+        }
+
+        // Toggle Select All
+        function toggleSelectAll(e) {
+            if (e.target.checked) {
+                emails.forEach(email => selectedEmails.add(email.id));
+            } else {
+                selectedEmails.clear();
+            }
+            updateSelectionUI();
+        }
+
+        // Update Selection UI
+        function updateSelectionUI() {
+            const count = selectedEmails.size;
+            document.getElementById('selectedCount').textContent = `(${count} selected)`;
+            document.getElementById('bulkDeleteBtn').disabled = count === 0;
+            document.getElementById('bulkMarkBtn').disabled = count === 0;
+            
+            // Update checkboxes
+            document.querySelectorAll('.email-checkbox').forEach(checkbox => {
+                const id = parseInt(checkbox.dataset.id);
+                checkbox.checked = selectedEmails.has(id);
+            });
+
+            // Update select all checkbox
+            const selectAllBtn = document.getElementById('selectAllBtn');
+            selectAllBtn.checked = selectedEmails.size > 0 && selectedEmails.size === emails.length;
+
+            // Reload to show visual feedback
+            loadEmails();
+        }
+
+        // Filter Emails
+        function filterEmails() {
+            const searchTerm = document.getElementById('searchBox').value.toLowerCase();
+            const filterType = document.getElementById('filterSelect').value;
+
+            emails = sampleEmails.filter(email => {
+                const matchesSearch = !searchTerm || 
+                    email.from.toLowerCase().includes(searchTerm) ||
+                    email.subject.toLowerCase().includes(searchTerm) ||
+                    email.preview.toLowerCase().includes(searchTerm);
+
+                const matchesFilter = !filterType ||
+                    (filterType === 'unread' && email.unread) ||
+                    (filterType === 'flagged' && email.flagged) ||
+                    (filterType === 'recent' && email.date.includes('Today'));
+
+                return matchesSearch && matchesFilter;
+            });
+
+            loadEmails();
+        }
+
+        // Bulk Delete
+        function bulkDelete() {
+            if (confirm(`Delete ${selectedEmails.size} email(s)?`)) {
+                sampleEmails = sampleEmails.filter(e => !selectedEmails.has(e.id));
+                selectedEmails.clear();
+                filterEmails();
+            }
+        }
+
+        // Bulk Mark
+        function bulkMark() {
+            sampleEmails.forEach(email => {
+                if (selectedEmails.has(email.id)) {
+                    email.flagged = !email.flagged;
+                }
+            });
+            selectedEmails.clear();
+            filterEmails();
+        }
+
+        // Refresh Emails
+        function refreshEmails() {
+            const btn = document.getElementById('refreshBtn');
+            btn.disabled = true;
+            btn.querySelector('i').classList.add('fa-spin');
+            
+            setTimeout(() => {
+                btn.disabled = false;
+                btn.querySelector('i').classList.remove('fa-spin');
+                alert('Emails refreshed!');
+            }, 1500);
+        }
+
+        // Open Email Modal
+        function openEmailModal(emailId) {
+            const email = sampleEmails.find(e => e.id === emailId);
+            if (!email) return;
+
+            document.getElementById('modalTitle').textContent = email.subject;
+            document.getElementById('modalContent').innerHTML = `
+                <div class="space-y-4">
+                    <div class="border-b pb-4">
+                        <p class="text-sm font-semibold text-gray-600">From:</p>
+                        <p class="text-gray-900">${escapeHtml(email.from)}</p>
+                    </div>
+                    <div class="border-b pb-4">
+                        <p class="text-sm font-semibold text-gray-600">Date:</p>
+                        <p class="text-gray-900">${email.date}</p>
+                    </div>
+                    <div class="prose prose-sm max-w-none">
+                        <p class="text-gray-900 whitespace-pre-wrap">${escapeHtml(email.body)}</p>
+                    </div>
+                </div>
+            `;
+
+            document.getElementById('emailModal').classList.remove('hidden');
+        }
+
+        // Close Modal
+        function closeModal() {
+            document.getElementById('emailModal').classList.add('hidden');
+        }
+
+        // Escape HTML
+        function escapeHtml(text) {
+            const map = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            };
+            return text.replace(/[&<>"']/g, m => map[m]);
+        }
+
+        // Close modal on background click
+        document.getElementById('emailModal').addEventListener('click', (e) => {
+            if (e.target === document.getElementById('emailModal')) {
+                closeModal();
+            }
+        });
+
+        // Initialize app
+        init();
+    </script>
+</body>
+</html>
