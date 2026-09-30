@@ -24,6 +24,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     db()->prepare("UPDATE mailboxes SET status=IF(status='active','disabled','active') WHERE id=?")->execute([(int)$_POST['id']]);
   } elseif ($act === 'delete') {
     db()->prepare('DELETE FROM mailboxes WHERE id=?')->execute([(int)$_POST['id']]); $msg = 'Deleted';
+  } elseif ($act === 'bulk_toggle') {
+    $ids = array_map('intval', explode(',', $_POST['ids'] ?? ''));
+    if (!empty($ids)) {
+      $placeholders = implode(',', array_fill(0, count($ids), '?'));
+      db()->prepare("UPDATE mailboxes SET status=IF(status='active','disabled','active') WHERE id IN ($placeholders)")->execute($ids);
+      $msg = count($ids) . " mailbox(es) updated";
+    }
+  } elseif ($act === 'bulk_delete') {
+    $ids = array_map('intval', explode(',', $_POST['ids'] ?? ''));
+    if (!empty($ids)) {
+      $placeholders = implode(',', array_fill(0, count($ids), '?'));
+      db()->prepare("DELETE FROM mailboxes WHERE id IN ($placeholders)")->execute($ids);
+      $msg = count($ids) . " mailbox(es) deleted";
+    }
   }
 }
 $q = trim($_GET['q'] ?? '');
@@ -35,61 +49,420 @@ $active = db()->query("SELECT COUNT(*) FROM mailboxes WHERE status='active'")->f
 $today = db()->query("SELECT COUNT(*) FROM activity_log WHERE action='fetch_ok' AND DATE(created_at)=CURDATE()")->fetchColumn();
 $failToday = db()->query("SELECT COUNT(*) FROM activity_log WHERE action='fetch_fail' AND DATE(created_at)=CURDATE()")->fetchColumn();
 $lastOk = db()->query("SELECT action, created_at FROM activity_log WHERE action IN ('fetch_ok','fetch_fail') ORDER BY id DESC LIMIT 1")->fetch();
-$mailState = !$lastOk ? ['No data yet','b-muted'] : ($lastOk['action']==='fetch_ok' ? ['Connected','b-success'] : ['Warning','b-warning']);
+$mailState = !$lastOk ? ['No data yet','bg-gray-200'] : ($lastOk['action']==='fetch_ok' ? ['Connected','bg-green-200'] : ['Warning','bg-yellow-200']);
 $c = csrf(); shell_start('Admin Dashboard', 'admin'); ?>
-<?php crumbs(['Admin', 'Dashboard']); ?>
-<div class="page-head"><div><h1>Admin Dashboard</h1><p class="muted">Mailboxes, system health and recent activity.</p></div>
-  <a href="#add" class="btn btn-primary"><i class="fa-solid fa-plus"></i> Add mailbox</a></div>
-<?php if ($msg): ?><div class="alert a-info" role="status" style="margin-bottom:16px"><i class="fa-solid fa-circle-info"></i><?= h($msg) ?></div><script>addEventListener('DOMContentLoaded',()=>toast(<?= json_encode($msg) ?>))</script><?php endif; ?>
-<div class="grid g4">
-  <?php foreach ([['fa-inbox','Total Mailboxes',$total,''],['fa-circle-check','Active',$active,''],['fa-envelope','Fetches Today',$today,$failToday?"$failToday failed":''],['fa-server','System Status',null,'']] as [$i,$l,$v,$sub]): ?>
-  <div class="card card-pad stat lift"><div class="row between"><span class="muted small"><?= $l ?></span><span class="icon-box" style="width:32px;height:32px"><i class="fa-solid <?= $i ?>"></i></span></div>
-    <?php if ($v === null): ?><div style="margin-top:12px"><span class="badge b-success"><span class="dot"></span>Healthy</span></div>
-    <?php else: ?><div class="num"><?= (int)$v ?></div><?php endif; ?>
-    <?php if ($sub): ?><div class="small" style="color:var(--danger)"><?= h($sub) ?></div><?php endif; ?></div>
-  <?php endforeach; ?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard - Outlook Viewer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @media (max-width: 640px) {
+            .stats-grid { grid-template-columns: 1fr; }
+            .mailbox-table { font-size: 0.875rem; }
+        }
+        @media (min-width: 641px) and (max-width: 1024px) {
+            .stats-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+        @media (min-width: 1025px) {
+            .stats-grid { grid-template-columns: repeat(4, 1fr); }
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+<div class="min-h-screen">
+    <!-- Header -->
+    <header class="bg-white shadow-lg sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+            <div class="flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div class="flex items-center gap-3">
+                    <div class="bg-gradient-to-br from-blue-600 to-blue-700 text-white p-2 rounded-lg">
+                        <i class="fas fa-shield-alt text-lg"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-2xl sm:text-3xl font-bold text-gray-900">Admin Dashboard</h1>
+                        <p class="text-xs sm:text-sm text-gray-600">Mailbox management & system status</p>
+                    </div>
+                </div>
+                <div class="flex gap-2">
+                    <a href="../" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg transition flex items-center gap-2">
+                        <i class="fas fa-arrow-left"></i>
+                        <span class="hidden sm:inline">Back</span>
+                    </a>
+                    <a href="logout.php" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition flex items-center gap-2">
+                        <i class="fas fa-sign-out-alt"></i>
+                        <span class="hidden sm:inline">Logout</span>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <!-- Alert Message -->
+        <?php if ($msg): ?>
+        <div class="mb-6 p-4 bg-green-100 border border-green-400 text-green-700 rounded-lg flex items-center gap-2 animate-pulse">
+            <i class="fas fa-check-circle"></i>
+            <span><?= h($msg) ?></span>
+            <button onclick="this.parentElement.style.display='none'" class="ml-auto text-green-700 hover:text-green-900">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <?php endif; ?>
+
+        <!-- Stats Grid -->
+        <div class="stats-grid gap-4 mb-8">
+            <div class="bg-white rounded-lg shadow-md p-6 border-l-4 border-blue-600">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-600 text-sm font-medium">Total Mailboxes</p>
+                        <p class="text-4xl font-bold text-gray-900 mt-2"><?= (int)$total ?></p>
+                    </div>
+                    <div class="bg-blue-100 p-4 rounded-full">
+                        <i class="fas fa-inbox text-2xl text-blue-600"></i>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-lg shadow-md p-6 border-l-4 border-green-600">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-600 text-sm font-medium">Active</p>
+                        <p class="text-4xl font-bold text-gray-900 mt-2"><?= (int)$active ?></p>
+                        <p class="text-xs text-gray-500 mt-1"><?= (int)($total - $active) ?> disabled</p>
+                    </div>
+                    <div class="bg-green-100 p-4 rounded-full">
+                        <i class="fas fa-circle-check text-2xl text-green-600"></i>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-lg shadow-md p-6 border-l-4 border-purple-600">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-600 text-sm font-medium">Fetches Today</p>
+                        <p class="text-4xl font-bold text-gray-900 mt-2"><?= (int)$today ?></p>
+                        <?php if ($failToday > 0): ?>
+                        <p class="text-xs text-red-600 mt-1">
+                            <i class="fas fa-exclamation-circle"></i> <?= (int)$failToday ?> failed
+                        </p>
+                        <?php endif; ?>
+                    </div>
+                    <div class="bg-purple-100 p-4 rounded-full">
+                        <i class="fas fa-envelope text-2xl text-purple-600"></i>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-lg shadow-md p-6 border-l-4 border-yellow-600">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-600 text-sm font-medium">System Status</p>
+                        <p class="text-xl font-bold mt-2 <?= strpos($mailState[1], 'green') !== false ? 'text-green-600' : (strpos($mailState[1], 'yellow') !== false ? 'text-yellow-600' : 'text-gray-600') ?>">
+                            <?= $mailState[0] ?>
+                        </p>
+                        <?php if ($lastOk): ?>
+                        <p class="text-xs text-gray-500 mt-1">Last: <?= date('H:i', strtotime($lastOk['created_at'])) ?></p>
+                        <?php endif; ?>
+                    </div>
+                    <div class="bg-yellow-100 p-4 rounded-full">
+                        <i class="fas fa-server text-2xl text-yellow-600"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Mailboxes Section -->
+        <div class="bg-white rounded-lg shadow-lg mb-8 overflow-hidden">
+            <div class="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4 text-white">
+                <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                    <div>
+                        <h2 class="text-2xl font-bold flex items-center gap-2">
+                            <i class="fas fa-envelope-open-text"></i> Mailboxes
+                        </h2>
+                        <p class="text-blue-100 text-sm mt-1"><?= count($rows) ?> mailbox(es) found</p>
+                    </div>
+                    <form method="GET" class="w-full sm:w-64">
+                        <div class="relative">
+                            <input type="text" name="q" value="<?= h($q) ?>" placeholder="Search mailboxes..." 
+                                   class="w-full px-4 py-2 pr-10 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-400">
+                            <i class="fas fa-search absolute right-3 top-3 text-gray-400"></i>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <?php if (!$rows): ?>
+            <div class="p-8 text-center">
+                <i class="fas fa-inbox text-6xl text-gray-300 mb-4"></i>
+                <h3 class="text-xl font-semibold text-gray-600 mb-2">No mailboxes found</h3>
+                <p class="text-gray-500 mb-4">Add your first mailbox using the form below</p>
+                <a href="#add" class="inline-block bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition">
+                    <i class="fas fa-plus"></i> Add Mailbox
+                </a>
+            </div>
+            <?php else: ?>
+            <div class="overflow-x-auto">
+                <div class="inline-flex gap-2 p-4 bg-gray-100 w-full border-b" id="bulkActionBar" style="display: none;">
+                    <input type="checkbox" id="selectAllMB" class="cursor-pointer">
+                    <span id="selectedCountMB" class="text-sm text-gray-700 ml-2">0 selected</span>
+                    <button onclick="bulkToggleMB()" class="ml-auto bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-1 rounded text-sm transition" id="bulkToggleBtn">
+                        <i class="fas fa-toggle-on"></i> Toggle Status
+                    </button>
+                    <button onclick="bulkDeleteMB()" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm transition" id="bulkDeleteBtn">
+                        <i class="fas fa-trash"></i> Delete
+                    </button>
+                </div>
+                <table class="w-full mailbox-table">
+                    <thead class="bg-gray-100 border-b">
+                        <tr>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-700">
+                                <input type="checkbox" id="selectAllCheckbox" class="cursor-pointer" onchange="toggleAllMB()">
+                            </th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-700">Email</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-700 hidden sm:table-cell">Credentials</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-700">Status</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-700 hidden md:table-cell">Last Checked</th>
+                            <th class="px-4 py-3 text-right text-xs font-semibold text-gray-700">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="mailboxTableBody">
+                        <?php foreach ($rows as $r): ?>
+                        <tr class="border-b hover:bg-gray-50 transition mailbox-row" data-id="<?= $r['id'] ?>">
+                            <td class="px-4 py-3 text-left">
+                                <input type="checkbox" class="mailbox-checkbox cursor-pointer" value="<?= $r['id'] ?>" onchange="updateBulkUI()">
+                            </td>
+                            <td class="px-4 py-3 text-left">
+                                <a href="../inbox.php?email=<?= urlencode($r['email']) ?>" target="_blank" class="text-blue-600 hover:text-blue-800 font-medium truncate block max-w-xs">
+                                    <?= h($r['email']) ?>
+                                    <i class="fas fa-external-link-alt text-xs ml-1"></i>
+                                </a>
+                            </td>
+                            <td class="px-4 py-3 text-gray-500 font-mono text-sm hidden sm:table-cell">••••••••</td>
+                            <td class="px-4 py-3 text-left">
+                                <?php if ($r['status'] === 'active'): ?>
+                                <span class="inline-flex items-center gap-1 bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-semibold">
+                                    <span class="w-2 h-2 bg-green-600 rounded-full"></span> Active
+                                </span>
+                                <?php else: ?>
+                                <span class="inline-flex items-center gap-1 bg-gray-100 text-gray-700 px-3 py-1 rounded-full text-xs font-semibold">
+                                    <span class="w-2 h-2 bg-gray-400 rounded-full"></span> Disabled
+                                </span>
+                                <?php endif; ?>
+                            </td>
+                            <td class="px-4 py-3 text-sm text-gray-600 hidden md:table-cell">
+                                <?= h($r['last_checked_at'] ?? '—') ?>
+                            </td>
+                            <td class="px-4 py-3 text-right space-x-1">
+                                <form method="post" style="display:inline">
+                                    <input type="hidden" name="csrf" value="<?= $c ?>">
+                                    <input type="hidden" name="act" value="toggle">
+                                    <input type="hidden" name="id" value="<?= $r['id'] ?>">
+                                    <button class="bg-yellow-500 hover:bg-yellow-600 text-white px-2 py-1 rounded text-xs transition" title="Toggle status">
+                                        <i class="fas fa-toggle-on"></i>
+                                    </button>
+                                </form>
+                                <form method="post" style="display:inline" onsubmit="return confirm('Delete this mailbox?')">
+                                    <input type="hidden" name="csrf" value="<?= $c ?>">
+                                    <input type="hidden" name="act" value="delete">
+                                    <input type="hidden" name="id" value="<?= $r['id'] ?>">
+                                    <button class="bg-red-500 hover:bg-red-600 text-white px-2 py-1 rounded text-xs transition" title="Delete mailbox">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+            <?php endif; ?>
+        </div>
+
+        <!-- Add Mailbox Section -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8" id="add">
+            <!-- Add Single Mailbox -->
+            <div class="bg-white rounded-lg shadow-lg p-6 border-t-4 border-blue-600">
+                <h3 class="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+                    <i class="fas fa-plus-circle text-blue-600"></i> Add Mailbox
+                </h3>
+                <form method="post" class="space-y-4">
+                    <input type="hidden" name="csrf" value="<?= $c ?>">
+                    <input type="hidden" name="act" value="add">
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Email Address</label>
+                        <input type="email" name="email" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" 
+                               required placeholder="user@outlook.com">
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Refresh Token</label>
+                        <input type="password" name="rt" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" 
+                               required autocomplete="off" placeholder="••••••••">
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Client ID</label>
+                        <input type="password" name="cid" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" 
+                               required autocomplete="off" placeholder="••••••••">
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Client Secret <span class="text-gray-500 text-xs">(optional)</span></label>
+                        <input type="password" name="cs" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" 
+                               autocomplete="off" placeholder="••••••••">
+                    </div>
+
+                    <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 rounded-lg transition flex items-center justify-center gap-2">
+                        <i class="fas fa-floppy-disk"></i> Save Mailbox
+                    </button>
+                </form>
+            </div>
+
+            <!-- Bulk Import -->
+            <div class="bg-white rounded-lg shadow-lg p-6 border-t-4 border-purple-600">
+                <h3 class="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+                    <i class="fas fa-file-upload text-purple-600"></i> Bulk Import
+                </h3>
+                <form method="post" class="space-y-4">
+                    <input type="hidden" name="csrf" value="<?= $c ?>">
+                    <input type="hidden" name="act" value="bulk">
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">One mailbox per line</label>
+                        <p class="text-xs text-gray-600 mb-2">Format: <code class="bg-gray-100 px-2 py-1 rounded">email|refresh_token|client_id|client_secret</code></p>
+                        <textarea name="lines" rows="7" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent font-mono text-sm" 
+                                  placeholder="user1@outlook.com|token1|id1|secret1&#10;user2@outlook.com|token2|id2|secret2"></textarea>
+                    </div>
+
+                    <button type="submit" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold py-2 rounded-lg transition flex items-center justify-center gap-2">
+                        <i class="fas fa-upload"></i> Import Mailboxes
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Activity Log -->
+        <div class="bg-white rounded-lg shadow-lg overflow-hidden">
+            <div class="bg-gradient-to-r from-green-600 to-green-700 px-6 py-4 text-white">
+                <h2 class="text-2xl font-bold flex items-center gap-2">
+                    <i class="fas fa-history"></i> Recent Activity
+                </h2>
+                <p class="text-green-100 text-sm mt-1">Last 15 activities</p>
+            </div>
+
+            <?php if (!$logs): ?>
+            <div class="p-8 text-center">
+                <i class="fas fa-clipboard-list text-6xl text-gray-300 mb-4"></i>
+                <p class="text-gray-600">No activity yet.</p>
+            </div>
+            <?php else: ?>
+            <div class="overflow-x-auto">
+                <table class="w-full">
+                    <thead class="bg-gray-100 border-b">
+                        <tr>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-700">Time</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-700">Mailbox</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-700">Event</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-700 hidden sm:table-cell">Detail</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($logs as $l):
+                            $badgeClass = $l['action']==='fetch_ok' ? 'bg-green-100 text-green-800' : ($l['action']==='fetch_fail' ? 'bg-red-100 text-red-800' : 'bg-blue-100 text-blue-800');
+                            $icon = $l['action']==='fetch_ok' ? 'fa-check-circle' : ($l['action']==='fetch_fail' ? 'fa-exclamation-circle' : 'fa-info-circle');
+                        ?>
+                        <tr class="border-b hover:bg-gray-50 transition">
+                            <td class="px-4 py-3 text-sm text-gray-600"><?= date('M d, H:i', strtotime($l['created_at'])) ?></td>
+                            <td class="px-4 py-3 text-sm text-gray-900 font-medium truncate max-w-xs"><?= h($l['email']) ?></td>
+                            <td class="px-4 py-3 text-sm">
+                                <span class="inline-flex items-center gap-1 <?= $badgeClass ?> px-3 py-1 rounded-full text-xs font-semibold">
+                                    <i class="fas <?= $icon ?>"></i> <?= ucfirst(str_replace('_', ' ', $l['action'])) ?>
+                                </span>
+                            </td>
+                            <td class="px-4 py-3 text-sm text-gray-600 hidden sm:table-cell"><?= h($l['detail'] ?? '—') ?></td>
+                        </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+            <?php endif; ?>
+        </div>
+    </main>
 </div>
-<div class="grid g3" style="margin-top:16px">
-  <div class="card" style="grid-column:span 2" id="mailboxes">
-    <div class="card-head"><h2>Mailboxes</h2>
-      <form class="field-wrap" style="width:220px;max-width:50%"><i class="fa-solid fa-magnifying-glass"></i><label for="q" class="sr-only">Search mailboxes</label><input id="q" name="q" value="<?= h($q) ?>" placeholder="Search…" class="input" style="height:36px"></form></div>
-    <?php if (!$rows): ?><div class="empty"><div class="icon-box"><i class="fa-solid fa-inbox"></i></div><h2>No mailboxes<?= $q ? ' found' : ' yet' ?></h2><p class="muted small">Add one using the form below.</p></div>
-    <?php else: ?><table class="table"><thead><tr><th>Email</th><th>Credentials</th><th>Status</th><th>Last checked</th><th style="text-align:right">Actions</th></tr></thead><tbody>
-      <?php foreach ($rows as $r): ?><tr>
-        <td><a class="truncate" style="display:block;max-width:260px;color:var(--primary);font-weight:500" target="_blank" href="../inbox.php?email=<?= urlencode($r['email']) ?>"><?= h($r['email']) ?></a></td>
-        <td data-l="Credentials" class="muted mono">••••••••</td>
-        <td data-l="Status"><?= $r['status']==='active' ? '<span class="badge b-success"><span class="dot"></span>Active</span>' : '<span class="badge b-muted"><span class="dot"></span>Disabled</span>' ?></td>
-        <td data-l="Last checked" class="muted small"><?= h($r['last_checked_at'] ?? '—') ?></td>
-        <td style="text-align:right;white-space:nowrap">
-          <a class="btn btn-ghost btn-icon btn-sm" target="_blank" href="../inbox.php?email=<?= urlencode($r['email']) ?>" aria-label="Open inbox"><i class="fa-solid fa-eye"></i></a>
-          <form method="post" style="display:inline"><input type="hidden" name="csrf" value="<?= $c ?>"><input type="hidden" name="act" value="toggle"><input type="hidden" name="id" value="<?= $r['id'] ?>"><button class="btn btn-ghost btn-icon btn-sm" aria-label="Enable or disable"><i class="fa-solid fa-power-off"></i></button></form>
-          <form method="post" style="display:inline" onsubmit="return confirm('Delete this mailbox?')"><input type="hidden" name="csrf" value="<?= $c ?>"><input type="hidden" name="act" value="delete"><input type="hidden" name="id" value="<?= $r['id'] ?>"><button class="btn btn-ghost btn-icon btn-sm" style="color:var(--danger)" aria-label="Delete"><i class="fa-solid fa-trash"></i></button></form>
-        </td></tr><?php endforeach; ?></tbody></table><?php endif; ?>
-  </div>
-  <div class="card"><div class="card-head"><h2>System Status</h2></div><ul class="check-list card-pad" style="padding-top:6px;padding-bottom:6px">
-    <li><i class="fa-solid fa-database muted"></i><span style="flex:1">Database</span><span class="badge b-success"><span class="dot"></span>Connected</span></li>
-    <li><i class="fa-solid fa-plug muted"></i><span style="flex:1">Mail connection</span><span class="badge <?= $mailState[1] ?>"><span class="dot"></span><?= $mailState[0] ?></span></li>
-    <li><i class="fa-solid fa-lock muted"></i><span style="flex:1">Encryption</span><span class="badge b-success"><span class="dot"></span>Healthy</span></li>
-    <li><i class="fa-regular fa-clock muted"></i><span style="flex:1">Last activity</span><span class="small muted"><?= h($logs[0]['created_at'] ?? '—') ?></span></li></ul></div>
-</div>
-<div class="grid g2" style="margin-top:16px" id="add">
-  <form method="post" class="card card-pad stack"><h2><i class="fa-solid fa-plus muted"></i> Add / update mailbox</h2>
-    <input type="hidden" name="csrf" value="<?= $c ?>"><input type="hidden" name="act" value="add">
-    <div><label class="label" for="f-email">Email</label><input id="f-email" name="email" type="email" class="input" required placeholder="user@outlook.com"></div>
-    <div><label class="label" for="f-rt">Refresh token</label><input id="f-rt" name="rt" type="password" class="input" required autocomplete="off"></div>
-    <div class="grid g2" style="gap:12px"><div><label class="label" for="f-cid">Client ID</label><input id="f-cid" name="cid" type="password" class="input" required autocomplete="off"></div>
-      <div><label class="label" for="f-cs">Client secret <span class="muted small">(optional)</span></label><input id="f-cs" name="cs" type="password" class="input" autocomplete="off"></div></div>
-    <button class="btn btn-primary"><i class="fa-solid fa-floppy-disk"></i> Save mailbox</button></form>
-  <form method="post" class="card card-pad stack"><h2><i class="fa-solid fa-file-import muted"></i> Bulk import</h2>
-    <input type="hidden" name="csrf" value="<?= $c ?>"><input type="hidden" name="act" value="bulk">
-    <div><label class="label" for="f-lines">One mailbox per line</label><textarea id="f-lines" name="lines" rows="7" class="textarea mono small" placeholder="email|refresh_token|client_id|client_secret"></textarea></div>
-    <button class="btn btn-secondary"><i class="fa-solid fa-upload"></i> Import</button></form>
-</div>
-<div class="card" style="margin-top:16px"><div class="card-head"><h2>Recent Activity</h2></div>
-  <?php if (!$logs): ?><div class="empty"><p class="muted small">No activity yet.</p></div><?php else: ?>
-  <table class="table"><thead><tr><th>Time</th><th>Mailbox</th><th>Event</th><th>Detail</th></tr></thead><tbody>
-  <?php foreach ($logs as $l): $b = $l['action']==='fetch_ok'?'b-success':($l['action']==='fetch_fail'?'b-danger':'b-primary'); ?>
-    <tr><td class="small muted" data-l="Time"><?= h($l['created_at']) ?></td><td class="truncate" data-l="Mailbox" style="max-width:240px"><?= h($l['email']) ?></td><td data-l="Event"><span class="badge <?= $b ?>"><?= h($l['action']) ?></span></td><td class="small muted" data-l="Detail"><?= h($l['detail']) ?></td></tr>
-  <?php endforeach; ?></tbody></table><?php endif; ?>
-</div>
-<?php shell_end();
+
+<script>
+let selectedMB = new Set();
+
+function toggleAllMB() {
+    const checkboxes = document.querySelectorAll('.mailbox-checkbox');
+    const selectAll = document.getElementById('selectAllCheckbox');
+    
+    checkboxes.forEach(cb => {
+        cb.checked = selectAll.checked;
+        if (selectAll.checked) {
+            selectedMB.add(parseInt(cb.value));
+        } else {
+            selectedMB.delete(parseInt(cb.value));
+        }
+    });
+    updateBulkUI();
+}
+
+function updateBulkUI() {
+    selectedMB.clear();
+    document.querySelectorAll('.mailbox-checkbox:checked').forEach(cb => {
+        selectedMB.add(parseInt(cb.value));
+    });
+    
+    const bulkBar = document.getElementById('bulkActionBar');
+    const countSpan = document.getElementById('selectedCountMB');
+    
+    if (selectedMB.size > 0) {
+        bulkBar.style.display = 'flex';
+        countSpan.textContent = selectedMB.size + ' selected';
+    } else {
+        bulkBar.style.display = 'none';
+    }
+    
+    document.getElementById('selectAllCheckbox').checked = selectedMB.size > 0 && selectedMB.size === document.querySelectorAll('.mailbox-checkbox').length;
+}
+
+function bulkToggleMB() {
+    if (selectedMB.size === 0 || !confirm(`Toggle status for ${selectedMB.size} mailbox(es)?`)) return;
+    
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.innerHTML = `
+        <input type="hidden" name="csrf" value="<?= $c ?>">
+        <input type="hidden" name="act" value="bulk_toggle">
+        <input type="hidden" name="ids" value="${Array.from(selectedMB).join(',')}">
+    `;
+    document.body.appendChild(form);
+    form.submit();
+}
+
+function bulkDeleteMB() {
+    if (selectedMB.size === 0 || !confirm(`Delete ${selectedMB.size} mailbox(es)? This cannot be undone.`)) return;
+    
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.innerHTML = `
+        <input type="hidden" name="csrf" value="<?= $c ?>">
+        <input type="hidden" name="act" value="bulk_delete">
+        <input type="hidden" name="ids" value="${Array.from(selectedMB).join(',')}">
+    `;
+    document.body.appendChild(form);
+    form.submit();
+}
+
+// Initialize
+document.addEventListener('DOMContentLoaded', updateBulkUI);
+</script>
+</body>
+</html>
+<?php shell_end(); ?>
